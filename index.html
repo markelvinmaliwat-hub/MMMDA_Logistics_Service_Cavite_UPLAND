@@ -580,90 +580,86 @@ apply()})();
 </script>
 
 <script id="live-auto-sync">
-// LIVE AUTO-SYNC from Google Sheet ID 1i7g_Hv6_tmQxqGhjSVzQFa8rFaJriC3wp9zK3wosnw0
+// LIVE AUTO-SYNC V9 - JSONP ONLY - BUONG DOCUMENT - BYPASSES CORS
 const SHEET_ID = "1i7g_Hv6_tmQxqGhjSVzQFa8rFaJriC3wp9zK3wosnw0";
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwUBLTrA7M8n0bdGzep6rY8pTlvwGRegpy59hJeeSHKxpWX8KaJsHTENcQdZB8N-Z/exec";
+const WEB_APP_URL_V9 = "https://script.google.com/macros/s/AKfycbwUBLTrA7M8n0bdGzep6rY8pTlvwGRegpy59hJeeSHKxpWX8KaJsHTENcQdZB8N-Z/exec";
 
-async function fetchLiveData(){
-  try {
-    // Try to fetch via Apps Script Web App
-    const res = await fetch(WEB_APP_URL + "?action=getAllData&t=" + Date.now(), {mode: 'cors'});
-    const json = await res.json();
-    console.log('Live data fetched:', json.total, 'records');
-    if(json.tabs && json.total > 0){
-      // Process live data
-      if(typeof S !== 'undefined' && typeof prep === 'function'){
-        S = {};
-        for(const k in json.tabs){
-          const rows = json.tabs[k];
-          if(rows && rows.length && !k.toUpperCase().includes('FACILITY')){
-            try { prep(k, rows); } catch(e){ console.error('prep error', k, e); }
-          }
-        }
-        // Update info display
-        const info = document.getElementById('info');
-        if(info){
-          let total = 0;
-          for(const t in S) total += S[t].rows.length;
-          info.textContent = 'LIVE: ' + total.toLocaleString() + ' total (PLDT:' + (S['PLDT']?S['PLDT'].rows.length:0) + ' RED:' + (S['RED']?S['RED'].rows.length:0) + ') | Auto-synced from Google Sheet | ' + new Date().toLocaleString();
-        }
-        if(typeof render === 'function') render();
-        if(typeof render2 === 'function') render2();
-        return true;
-      }
+function processLiveData(json){
+  if(!json) return false;
+  let tabs = json.tabs || json;
+  if(!json.tabs){
+    // fallback if root is sheets
+    tabs = json;
+  }
+  if(typeof S !== 'undefined' && typeof prep === 'function' && tabs){
+    let hasData = false;
+    for(const k in tabs){ if(Array.isArray(tabs[k]) && tabs[k].length>1) { hasData=true; break; } }
+    if(!hasData) return false;
+    S = {};
+    let processed = 0;
+    for(const k in tabs){
+      const rows = tabs[k];
+      if(!rows || !rows.length) continue;
+      if(String(k).toUpperCase().includes('FACILITY')) continue;
+      try { prep(k, rows); processed++; } catch(e){ console.error('prep error', k, e); }
     }
-  } catch(e){
-    console.error('Live fetch failed, trying JSONP:', e);
-    // Fallback to JSONP
-    try {
-      const script = document.createElement('script');
-      script.src = WEB_APP_URL + "?action=getAllData&callback=handleLiveData&t=" + Date.now();
-      document.body.appendChild(script);
-    } catch(e2){ console.error('JSONP failed', e2); }
+    if(processed===0) return false;
+    let totalRows = 0;
+    for(const t in S) totalRows += S[t].rows.length;
+    const info = document.getElementById('info');
+    if(info){
+      const pldtCount = S['PLDT'] ? S['PLDT'].rows.length : 0;
+      const redCount = S['RED'] ? S['RED'].rows.length : 0;
+      info.innerHTML = '<span style="color:#16a34a;font-weight:700">● LIVE AUTO-SYNC V9</span> - LIVE: ' + totalRows.toLocaleString() + ' total (PLDT:' + pldtCount + ' RED:' + redCount + ') | Buong document: ' + Object.keys(tabs).join(', ') + ' | Auto-synced: ' + new Date().toLocaleString() + ' <button onclick="fetchLiveData()" style="margin-left:8px;padding:2px 8px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:11px">Refresh now</button>';
+    }
+    if(typeof render === 'function') render();
+    if(typeof render2 === 'function') render2();
+    console.log('LIVE V9 OK:', totalRows, 'records');
+    return true;
   }
   return false;
 }
 
-function handleLiveData(json){
-  console.log('Live data via JSONP:', json);
-  if(json.tabs){
-    S = {};
-    for(const k in json.tabs){
-      const rows = json.tabs[k];
-      if(rows && rows.length && !k.toUpperCase().includes('FACILITY')){
-        try { prep(k, rows); } catch(e){}
-      }
+function fetchLiveData(){
+  const info = document.getElementById('info');
+  if(info) info.textContent = 'Syncing V9 buong document from Google Sheet...';
+  const cbName = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+  window[cbName] = function(json){
+    try {
+      console.log('JSONP V9 data:', json);
+      processLiveData(json);
+    } catch(e){ console.error('process error', e); }
+    finally {
+      delete window[cbName];
+      const s = document.getElementById(cbName);
+      if(s) s.remove();
     }
-    let total = 0;
-    for(const t in S) total += S[t].rows.length;
-    const info = document.getElementById('info');
-    if(info) info.textContent = 'LIVE: ' + total.toLocaleString() + ' total | Auto-synced | ' + new Date().toLocaleString();
-    if(typeof render === 'function') render();
-    if(typeof render2 === 'function') render2();
-  }
+  };
+  const script = document.createElement('script');
+  script.id = cbName;
+  script.src = WEB_APP_URL + "?action=getAllData&callback=" + cbName + "&t=" + Date.now();
+  script.onerror = function(){ 
+    console.error('JSONP V9 failed');
+    if(info) info.textContent = 'Live sync failed - using local data · ' + info.textContent;
+    delete window[cbName];
+  };
+  document.body.appendChild(script);
+  setTimeout(function(){ 
+    if(window[cbName]){
+      console.warn('JSONP V9 timeout');
+      delete window[cbName];
+      const s=document.getElementById(cbName); if(s) s.remove();
+    }
+  }, 15000);
 }
 
-// Auto-sync on load and every 2 minutes
-setTimeout(fetchLiveData, 2000);
-setInterval(fetchLiveData, 120000);
+window.fetchLiveData = fetchLiveData;
+window.processLiveData = processLiveData;
 
-// Minimal clickable fix
-(function(){
-  const lu = document.getElementById('lu');
-  if(lu){
-    lu.placeholder='e.g. 407520 (NO P)';
-    lu.addEventListener('input', function(){
-      let v=this.value.toUpperCase().replace(/^P/,'').replace(/[^0-9]/g,'').slice(0,10);
-      if(this.value!==v) this.value=v;
-    });
-  }
-  setTimeout(()=>{
-    ['swi','swu','lgo','t1','t2','vsw','le','lp','lu'].forEach(id=>{
-      const el=document.getElementById(id);
-      if(el){ el.disabled=false; el.style.pointerEvents='auto'; }
-    });
-  }, 500);
-})();
+// Auto-sync: 3 sec after load, then every 90 sec
+setTimeout(fetchLiveData, 3000);
+setInterval(fetchLiveData, 90000);
 </script>
 <style id="minimal-clickable-fix">
 #lg, .lc, .lgs, #swi, #swu, #lgo, #le, #lp, #lu, #lp2, #t1, #t2, #vsw { pointer-events: auto !important; }
