@@ -579,58 +579,70 @@ b.onclick=()=>{v=v==='m'?'w':'m';try{localStorage.setItem('mm_view',v)}catch(e){
 apply()})();
 </script>
 
-<script id="live-auto-sync">
-// LIVE AUTO-SYNC V9 - JSONP ONLY - BUONG DOCUMENT - BYPASSES CORS
-const SHEET_ID = "1i7g_Hv6_tmQxqGhjSVzQFa8rFaJriC3wp9zK3wosnw0";
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwUBLTrA7M8n0bdGzep6rY8pTlvwGRegpy59hJeeSHKxpWX8KaJsHTENcQdZB8N-Z/exec";
-const WEB_APP_URL_V9 = "https://script.google.com/macros/s/AKfycbwUBLTrA7M8n0bdGzep6rY8pTlvwGRegpy59hJeeSHKxpWX8KaJsHTENcQdZB8N-Z/exec";
 
-function processLiveData(json){
-  if(!json) return false;
-  let tabs = json.tabs || json;
-  if(!json.tabs){
-    // fallback if root is sheets
-    tabs = json;
+<style id="minimal-clickable-fix">
+#lg, .lc, .lgs, #swi, #swu, #lgo, #le, #lp, #lu, #lp2, #t1, #t2, #vsw { pointer-events: auto !important; }
+#le, #lp, #lu, #lp2 { cursor: text !important; }
+#swi, #swu, #lgo, #t1, #t2, #vsw { cursor: pointer !important; }
+</style>
+
+<script id="live-auto-sync-debug">
+// V10 DEBUG - SHOW ALL GSHEET TABS AND FORCE INCLUDE ALL DETAILS
+const SHEET_ID_DEBUG = "1i7g_Hv6_tmQxqGhjSVzQFa8rFaJriC3wp9zK3wosnw0";
+const WEB_APP_URL_DEBUG = "https://script.google.com/macros/s/AKfycbwUBLTrA7M8n0bdGzep6rY8pTlvwGRegpy59hJeeSHKxpWX8KaJsHTENcQdZB8N-Z/exec";
+
+function debugProcessLiveData(json){
+  console.log("FULL GSHEET JSON:", json);
+  if(!json || !json.tabs) {
+    console.error("No tabs in JSON", json);
+    return false;
   }
-  if(typeof S !== 'undefined' && typeof prep === 'function' && tabs){
-    let hasData = false;
-    for(const k in tabs){ if(Array.isArray(tabs[k]) && tabs[k].length>1) { hasData=true; break; } }
-    if(!hasData) return false;
+  let tabs = json.tabs;
+  // Show debug in info
+  const info = document.getElementById('info');
+  let debugHtml = '<div style="background:#fff3cd;border:1px solid #ffc107;padding:6px;margin:4px 0;border-radius:4px;font-size:11px"><b>DEBUG - Buong document tabs na nakuha:</b><br>';
+  let totalDebug = 0;
+  for(const k in tabs){
+    const rows = tabs[k];
+    const cnt = rows ? rows.length-1 : 0;
+    totalDebug += Math.max(0,cnt);
+    debugHtml += k + ': ' + cnt + ' rows | ';
+  }
+  debugHtml += '<br><b>Total rows sa buong document: ' + totalDebug + '</b> | GSheet total from server: ' + (json.total||0) + '</div>';
+  
+  // Try to prep ALL tabs, not just PLDT/RED/VALIDATORS
+  if(typeof S !== 'undefined' && typeof prep === 'function'){
     S = {};
-    let processed = 0;
+    let ok = 0, fail = 0;
     for(const k in tabs){
-      const rows = tabs[k];
-      if(!rows || !rows.length) continue;
       if(String(k).toUpperCase().includes('FACILITY')) continue;
-      try { prep(k, rows); processed++; } catch(e){ console.error('prep error', k, e); }
+      if(String(k).toUpperCase().includes('PAYMENT LOG')) continue;
+      if(String(k).toUpperCase().includes('ACTIVITY LOG')) continue;
+      try {
+        prep(k, tabs[k]);
+        ok++;
+      } catch(e){
+        console.error('prep fail', k, e);
+        fail++;
+      }
     }
-    if(processed===0) return false;
-    let totalRows = 0;
-    for(const t in S) totalRows += S[t].rows.length;
-    const info = document.getElementById('info');
+    debugHtml += '<div style="font-size:11px">Prep OK: ' + ok + ' tabs, Fail: ' + fail + '</div>';
     if(info){
-      const pldtCount = S['PLDT'] ? S['PLDT'].rows.length : 0;
-      const redCount = S['RED'] ? S['RED'].rows.length : 0;
-      info.innerHTML = '<span style="color:#16a34a;font-weight:700">● LIVE AUTO-SYNC V9</span> - LIVE: ' + totalRows.toLocaleString() + ' total (PLDT:' + pldtCount + ' RED:' + redCount + ') | Buong document: ' + Object.keys(tabs).join(', ') + ' | Auto-synced: ' + new Date().toLocaleString() + ' <button onclick="fetchLiveData()" style="margin-left:8px;padding:2px 8px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:11px">Refresh now</button>';
+      info.innerHTML = '<span style="color:#16a34a;font-weight:700">● LIVE AUTO-SYNC V10 DEBUG</span> - LIVE: ' + json.total + ' total | Buong document | Auto-synced: ' + new Date().toLocaleString() + debugHtml;
     }
     if(typeof render === 'function') render();
     if(typeof render2 === 'function') render2();
-    console.log('LIVE V9 OK:', totalRows, 'records');
     return true;
   }
   return false;
 }
 
-function fetchLiveData(){
-  const info = document.getElementById('info');
-  if(info) info.innerHTML = '<span style="color:#16a34a;font-weight:700">● LIVE AUTO-SYNC V9</span> - Syncing buong document from Google Sheet...';
-  const cbName = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+function fetchLiveDataV10(){
+  const cbName = 'cb_v10_' + Date.now();
   window[cbName] = function(json){
     try {
-      console.log('JSONP V9 data:', json);
-      processLiveData(json);
-    } catch(e){ console.error('process error', e); }
-    finally {
+      debugProcessLiveData(json);
+    } finally {
       delete window[cbName];
       const s = document.getElementById(cbName);
       if(s) s.remove();
@@ -638,32 +650,14 @@ function fetchLiveData(){
   };
   const script = document.createElement('script');
   script.id = cbName;
-  script.src = WEB_APP_URL + "?action=getAllData&callback=" + cbName + "&t=" + Date.now();
-  script.onerror = function(){ 
-    console.error('JSONP V9 failed');
-    if(info) info.textContent = 'Live sync failed - using local data · ' + info.textContent;
-    delete window[cbName];
-  };
+  script.src = WEB_APP_URL_DEBUG + "?action=getAllData&callback=" + cbName + "&t=" + Date.now();
+  script.onerror = function(){ console.error('V10 JSONP fail'); };
   document.body.appendChild(script);
-  setTimeout(function(){ 
-    if(window[cbName]){
-      console.warn('JSONP V9 timeout');
-      delete window[cbName];
-      const s=document.getElementById(cbName); if(s) s.remove();
-    }
-  }, 15000);
 }
 
-window.fetchLiveData = fetchLiveData;
-window.processLiveData = processLiveData;
-
-// Auto-sync: 3 sec after load, then every 90 sec
-setTimeout(fetchLiveData, 3000);
-setInterval(fetchLiveData, 90000);
+window.fetchLiveData = fetchLiveDataV10;
+setTimeout(fetchLiveDataV10, 2000);
+setInterval(fetchLiveDataV10, 30000);
 </script>
-<style id="minimal-clickable-fix">
-#lg, .lc, .lgs, #swi, #swu, #lgo, #le, #lp, #lu, #lp2, #t1, #t2, #vsw { pointer-events: auto !important; }
-#le, #lp, #lu, #lp2 { cursor: text !important; }
-#swi, #swu, #lgo, #t1, #t2, #vsw { cursor: pointer !important; }
-</style>
+
 </body></html>
